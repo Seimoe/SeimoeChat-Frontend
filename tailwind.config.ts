@@ -8,6 +8,25 @@ export default {
   ],
   theme: {
     extend: {
+      typography: {
+        DEFAULT: {
+          css: {
+            'code::before': {
+              content: '&nbsp&nbsp',
+            },
+            'code::after': {
+              content: '&nbsp&nbsp',
+            },
+            code: {
+              background: '#ffeff0',
+              wordWrap: 'break-word',
+              boxDecorationBreak: 'clone',
+              padding: '.1rem .3rem .2rem',
+              borderRadius: '.2rem',
+            }
+          },
+        },
+      },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
@@ -22,5 +41,5 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/typography'),],
 } satisfies Config;
