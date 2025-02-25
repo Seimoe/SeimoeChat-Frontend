@@ -1,7 +1,7 @@
 'use client'
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useRef} from 'react';
 import {motion, AnimatePresence} from 'framer-motion';
-import {Send, Plus, Mic, Square, RotateCcw, Expand, Brain} from 'lucide-react';
+import {Send, Image, Mic, Square, RotateCcw, Expand, Brain, X} from 'lucide-react';
 import FullscreenEditor from './FullscreenEditor';
 import debounce from 'lodash/debounce';
 import {useChatStore} from '@/stores/chatStore';
@@ -11,7 +11,7 @@ import Tooltip from '@/components/ui/Tooltip';
 interface InputAreaProps {
     inputValue: string;
     setInputValue: (value: string) => void;
-    onSend: (text: string) => void;
+    onSend: (text: string, images?: string[]) => void;
     isGenerating?: boolean;
     onStop?: () => void;
     onClear?: () => void;
@@ -31,25 +31,30 @@ const expandButtonVariants = {
 };
 
 const InputArea: React.FC<InputAreaProps> = ({
-                                                 inputValue,
-                                                 setInputValue,
-                                                 onSend,
-                                                 isGenerating = false,
-                                                 onStop,
-                                                 onClear
-                                             }) => {
+    inputValue,
+    setInputValue,
+    onSend,
+    isGenerating = false,
+    onStop,
+    onClear
+}) => {
     const [rotateCount, setRotateCount] = useState(0);
     const [showExpandButton, setShowExpandButton] = useState(false);
     const [isLongContent, setIsLongContent] = useState(false);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isFullscreenEditorOpen, setIsFullscreenEditorOpen] = useState(false);
     const [isThinkingMenuOpen, setIsThinkingMenuOpen] = useState(false);
+    const [selectedImages, setSelectedImages] = useState<string[]>([]);
     const currentModel = useChatStore((state) => state.currentModel);
     const reasoningEffort = useChatStore((state) => state.reasoningEffort);
     const setReasoningEffort = useChatStore((state) => state.setReasoningEffort);
+    const [isDraggingGlobal, setIsDraggingGlobal] = useState(false);
+    const [isDraggingOver, setIsDraggingOver] = useState(false);
 
     const currentModelConfig = modelConfigs.find(m => m.id === currentModel);
     const showThinkingButton = currentModelConfig?.supportsThinkingEffort;
+    const supportsImages = currentModelConfig?.supportsImageInput;
 
     const adjustTextareaHeight = useCallback(
         debounce(() => {
@@ -107,9 +112,10 @@ const InputArea: React.FC<InputAreaProps> = ({
                 }, 0);
             } else if (!e.shiftKey) {
                 e.preventDefault();
-                if (inputValue.trim() !== '') {
-                    onSend(inputValue);
+                if (inputValue.trim() !== '' || selectedImages.length > 0) {
+                    onSend(inputValue, selectedImages);
                     setInputValue('');
+                    setSelectedImages([]);
                     setShowExpandButton(false);
                     setIsLongContent(false);
                     if (textareaRef.current) {
@@ -119,7 +125,7 @@ const InputArea: React.FC<InputAreaProps> = ({
                 }
             }
         }
-    }, [inputValue, onSend, setInputValue]);
+    }, [inputValue, onSend, setInputValue, selectedImages]);
 
     const handleClearClick = useCallback(() => {
         setRotateCount(prev => prev - 1);
@@ -135,12 +141,238 @@ const InputArea: React.FC<InputAreaProps> = ({
         setIsLongContent(false);
     }, []);
 
+    // 图片上传相关处理
+    const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || !supportsImages) return;
+
+        const imageProcessPromises = Array.from(files).map(file => {
+            return new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (e.target?.result) {
+                        resolve(e.target.result as string);
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        Promise.all(imageProcessPromises).then(imageDataUrls => {
+            setSelectedImages(prev => [...prev, ...imageDataUrls]);
+        });
+
+        // 清空输入，以便再次选择相同的文件
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    }, [supportsImages]);
+
+    // 处理粘贴图片
+    const handlePaste = useCallback((e: React.ClipboardEvent) => {
+        if (!supportsImages) return;
+        
+        const items = e.clipboardData.items;
+        const imageItems = Array.from(items).filter(item => item.type.startsWith('image'));
+        
+        if (imageItems.length === 0) return;
+        
+        imageItems.forEach(item => {
+            const file = item.getAsFile();
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (e.target?.result) {
+                        setSelectedImages(prev => [...prev, e.target!.result as string]);
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }, [supportsImages]);
+
+    // 处理拖放图片
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        if (!supportsImages) return;
+        
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        
+        const imageFiles = Array.from(files).filter(file => file.type.startsWith('image'));
+        
+        imageFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (e.target?.result) {
+                    setSelectedImages(prev => [...prev, e.target!.result as string]);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    }, [supportsImages]);
+    
+    const handleDragEnter = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        if (!supportsImages) return;
+        setIsDraggingOver(true);
+    }, [supportsImages]);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        if (!supportsImages) return;
+        // 确保鼠标真的离开了元素而不是进入了子元素
+        const relatedTarget = e.relatedTarget as Node;
+        if (e.currentTarget.contains(relatedTarget)) return;
+        setIsDraggingOver(false);
+    }, [supportsImages]);
+
+    // 使用 useEffect 添加全局拖拽事件监听
+    React.useEffect(() => {
+        if (!supportsImages) return;
+        
+        const handleGlobalDragEnter = (e: DragEvent) => {
+            if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+                setIsDraggingGlobal(true);
+            }
+        };
+        
+        const handleGlobalDragLeave = (e: DragEvent) => {
+            // 只有当拖拽离开窗口时才重置状态
+            if (e.clientX <= 0 || e.clientY <= 0 || 
+                e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+                setIsDraggingGlobal(false);
+            }
+        };
+        
+        const resetDragStates = () => {
+            setIsDraggingGlobal(false);
+            setIsDraggingOver(false);
+        };
+        
+        const handleGlobalDrop = resetDragStates;
+        const handleGlobalDragEnd = resetDragStates;
+        
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                resetDragStates();
+            }
+        };
+
+        document.addEventListener('dragenter', handleGlobalDragEnter);
+        document.addEventListener('dragleave', handleGlobalDragLeave);
+        document.addEventListener('drop', handleGlobalDrop);
+        document.addEventListener('dragend', handleGlobalDragEnd);
+        document.addEventListener('keydown', handleKeyDown);
+        
+        return () => {
+            document.removeEventListener('dragenter', handleGlobalDragEnter);
+            document.removeEventListener('dragleave', handleGlobalDragLeave);
+            document.removeEventListener('drop', handleGlobalDrop);
+            document.removeEventListener('dragend', handleGlobalDragEnd);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [supportsImages]);
+
+    // 删除图片
+    const removeImage = useCallback((index: number) => {
+        setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    }, []);
+
     return (
-        <div className="relative p-3 pb-4 sm:p-4 sm:pb-6">
+        <div 
+            className={`relative p-3 pb-4 sm:p-4 sm:pb-6 transition-all duration-300 ${
+                isDraggingGlobal && !isDraggingOver ? 'bg-orange-50/30' : ''
+            }`}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            {/* 全局拖拽提示 */}
+            <AnimatePresence>
+                {isDraggingGlobal && !isDraggingOver && supportsImages && (
+                    <motion.div
+                        initial={{opacity: 0}}
+                        animate={{opacity: 1}}
+                        exit={{opacity: 0}}
+                        className="absolute inset-0 border-2 border-dashed border-orange-200 rounded-lg flex items-center justify-center z-30 pointer-events-none"
+                    >
+                        <motion.div 
+                            animate={{y: [0, -10, 0]}}
+                            transition={{repeat: Infinity, duration: 2}}
+                            className="bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-md text-center"
+                        >
+                            <Image size={32} className="mx-auto mb-2 text-orange-400" strokeWidth={1.5} />
+                            <p className="text-orange-500 font-medium">拖拽到此处添加图片</p>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            
             <div className="mx-auto max-w-2xl">
+                {/* 图片预览区域 */}
+                {selectedImages.length > 0 && (
+                    <motion.div 
+                        initial={{opacity: 0, y: 10}}
+                        animate={{opacity: 1, y: 0}}
+                        exit={{opacity: 0, y: 10}}
+                        className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-white/60 p-3 mb-3 overflow-x-auto"
+                    >
+                        <div className="flex gap-2 flex-wrap">
+                            {selectedImages.map((image, index) => (
+                                <div key={index} className="relative group">
+                                    <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200">
+                                        <img 
+                                            src={image} 
+                                            alt={`预览图 ${index+1}`} 
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </div>
+                                    <motion.button
+                                        whileHover={{scale: 1.1}}
+                                        whileTap={{scale: 0.9}}
+                                        onClick={() => removeImage(index)}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md opacity-80 hover:opacity-100 transition-opacity"
+                                    >
+                                        <X size={12} />
+                                    </motion.button>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+                
+                {/* 拖拽提示覆盖层 - 当拖拽到输入区域上时显示 */}
+                <AnimatePresence>
+                    {isDraggingOver && supportsImages && (
+                        <motion.div
+                            initial={{opacity: 0}}
+                            animate={{opacity: 1}}
+                            exit={{opacity: 0}}
+                            className="absolute inset-0 bg-orange-50/80 backdrop-blur-sm flex items-center justify-center rounded-lg border-2 border-dashed border-orange-300 z-50"
+                        >
+                            <motion.div 
+                                className="text-orange-500 flex flex-col items-center"
+                                animate={{scale: [1, 1.05, 1]}}
+                                transition={{repeat: Infinity, duration: 1.5}}
+                            >
+                                <Image size={40} strokeWidth={1.5} />
+                                <p className="mt-2 font-medium">释放鼠标添加图片</p>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+                
                 <motion.div
                     initial={{y: 20, opacity: 0}}
-                    animate={{y: 0, opacity: 1}}
+                    animate={{
+                        y: 0, 
+                        opacity: 1,
+                        boxShadow: isDraggingGlobal && !isDraggingOver 
+                            ? '0 0 0 2px rgba(249, 115, 22, 0.3), 0 8px 32px rgba(0, 0, 0, 0.08)'
+                            : '0 8px 32px rgba(0, 0, 0, 0.08)'
+                    }}
                     transition={{
                         duration: 0.4,
                         type: "spring",
@@ -165,13 +397,24 @@ const InputArea: React.FC<InputAreaProps> = ({
                         <RotateCcw size={16} className="sm:w-6 sm:h-6 text-gray-700" strokeWidth={1.5}/>
                     </motion.button>
 
-                    <motion.button
-                        whileHover={{scale: 1.05}}
-                        whileTap={{scale: 0.95}}
-                        className="p-2 sm:p-2.5 self-stretch flex items-center justify-center"
-                    >
-                        <Plus size={22} className="sm:w-7 sm:h-7 text-gray-700" strokeWidth={1.5}/>
-                    </motion.button>
+                    {supportsImages && (
+                        <motion.button
+                            whileHover={{scale: 1.05}}
+                            whileTap={{scale: 0.95}}
+                            className="p-2 sm:p-2.5 self-stretch flex items-center justify-center"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <Image size={22} className="sm:w-7 sm:h-7 text-gray-700" strokeWidth={1.5}/>
+                            <input 
+                                type="file" 
+                                ref={fileInputRef}
+                                accept="image/*" 
+                                onChange={handleImageUpload}
+                                className="hidden"
+                                multiple
+                            />
+                        </motion.button>
+                    )}
 
                     {showThinkingButton && (
                         <motion.div className="relative">
@@ -305,7 +548,7 @@ const InputArea: React.FC<InputAreaProps> = ({
                                                         dots: 3,
                                                         color: 'bg-purple-400'
                                                     }
-                                                ].map((option) => (
+                                                ].map(option => (
                                                     <motion.button
                                                         key={option.value}
                                                         whileHover={{backgroundColor: 'rgba(0,0,0,0.03)'}}
@@ -349,33 +592,32 @@ const InputArea: React.FC<InputAreaProps> = ({
                             </AnimatePresence>
                         </motion.div>
                     )}
-
                     <motion.div
-                        layout
-                        initial={false}
-                        animate={{width: "100%"}}
-                        transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 25,
-                            mass: 1.2
+                    layout
+                    initial={false}
+                    animate={{width: "100%"}}
+                    transition={{
+                        type: "spring",
+                        stiffness: 300,
+                        damping: 25,
+                        mass: 1.2
+                    }}
+                    className="bg-white rounded-[14px] sm:rounded-[16px] shadow-sm flex items-stretch relative flex-1 min-h-[40px] sm:min-h-[48px] overflow-hidden"
+                >
+                    <textarea
+                        ref={textareaRef}
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        placeholder={"给希茉发消息..."}
+                        rows={1}
+                        className="bg-transparent outline-none text-gray-600/90 placeholder:text-gray-500/60 w-full px-3 sm:px-4 py-2.5 text-base sm:text-base resize-none overflow-hidden mr-2"
+                        style={{
+                            maxHeight: '200px',
                         }}
-                        className="bg-white rounded-[14px] sm:rounded-[16px] shadow-sm flex items-stretch relative flex-1 min-h-[40px] sm:min-h-[48px] overflow-hidden"
-                    >
-                        <textarea
-                            ref={textareaRef}
-                            value={inputValue}
-                            onChange={handleInputChange}
-                            onKeyDown={handleKeyDown}
-                            placeholder="给希茉发消息..."
-                            rows={1}
-                            className="bg-transparent outline-none text-gray-600/90 placeholder:text-gray-500/60 w-full px-3 sm:px-4 py-2.5 text-base sm:text-base resize-none overflow-hidden mr-2"
-                            style={{
-                                maxHeight: '200px',
-                            }}
-                        />
-
-                        <div
+                    />
+                    <div
                             className="flex flex-col justify-between items-center w-12 sm:w-14 pl-1 bg-gradient-to-r from-transparent via-gray-100/50 to-gray-100/50">
                             {showExpandButton && (
                                 <AnimatePresence mode="wait">
@@ -405,7 +647,7 @@ const InputArea: React.FC<InputAreaProps> = ({
                             )}
 
                             <AnimatePresence mode="wait" initial={false}>
-                                {(inputValue || isGenerating) && (
+                                {(inputValue || isGenerating || selectedImages.length > 0) && (
                                     <motion.button
                                         key={isGenerating ? "stop" : "send"}
                                         initial={{scale: 0.8, opacity: 0}}
@@ -425,9 +667,10 @@ const InputArea: React.FC<InputAreaProps> = ({
                                             setInputValue('');
                                             resetTextarea();
                                         } : () => {
-                                            if (inputValue.trim() !== '') {
-                                                onSend(inputValue);
+                                            if (inputValue.trim() !== '' || selectedImages.length > 0) {
+                                                onSend(inputValue, selectedImages);
                                                 setInputValue('');
+                                                setSelectedImages([]);
                                                 resetTextarea();
                                             }
                                         }}
@@ -469,8 +712,7 @@ const InputArea: React.FC<InputAreaProps> = ({
                             </AnimatePresence>
                         </div>
                     </motion.div>
-
-                    {!inputValue && !isGenerating && (
+                    {!inputValue && !isGenerating && selectedImages.length === 0 && (
                         <motion.button
                             whileHover={{scale: 1.05}}
                             whileTap={{scale: 0.95}}
@@ -487,7 +729,10 @@ const InputArea: React.FC<InputAreaProps> = ({
                 onClose={() => setIsFullscreenEditorOpen(false)}
                 value={inputValue}
                 onChange={setInputValue}
-                onSend={onSend}
+                onSend={(text) => {
+                    onSend(text, selectedImages);
+                    setSelectedImages([]);
+                }}
             />
         </div>
     );

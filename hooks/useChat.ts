@@ -13,15 +13,18 @@ const useChat = () => {
     // 输入框状态
     const [localInputValue, setLocalInputValue] = useState('');
 
-    const sendMessage = useCallback(async (text: string, retryCount = 3) => {
-        if (!text.trim()) return;
+    const sendMessage = useCallback(async (text: string, images: string[] = [], retryCount = 3) => {
+        if (!text.trim() && images.length === 0) return;
 
         // 添加用户消息
         addMessage({
             text,
             isAi: false,
-            type: 'text',
+            type: images.length > 0 ? 'image' : 'text',
             status: 'sent',
+            metadata: images.length > 0 ? {
+                imageUrls: images
+            } : undefined,
         });
 
         const aiMessageId = nanoid();
@@ -53,6 +56,7 @@ const useChat = () => {
                             text,
                             useChatStore.getState().currentModel,
                             useChatStore.getState().messages,
+                            images,
                             (partialUpdate, error) => {
                                 if (error) {
                                     useChatStore.getState().updateMessage(aiMessageId, {
@@ -123,6 +127,7 @@ const useChat = () => {
             return;
         }
         const userText = lastMessage.text;
+        const images = lastMessage.metadata?.imageUrls || [];
         const newAiMessageId = nanoid();
 
         // 修改前：未设置 modelId
@@ -152,6 +157,7 @@ const useChat = () => {
                             userText,
                             useChatStore.getState().currentModel,
                             useChatStore.getState().messages,
+                            images,
                             (partialUpdate, error) => {
                                 if (error) {
                                     useChatStore.getState().updateMessage(newAiMessageId, {

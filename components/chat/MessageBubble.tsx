@@ -261,136 +261,91 @@ const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({message}) => {
     const nonAiChunks = useMemo(() => splitTextIntoChunks(message.text), [message.text, splitTextIntoChunks]);
 
     const renderMessageContent = () => {
-        // 判断流式请求中的逻辑
-        if (message.status === 'sending' && message.text.trim() === '') {
-            if (messageModelConfig.supportsDeepThinking) {
-                return (
-                    <ThinkingProcess
-                        content={message.metadata?.reasoning_content || ''}
-                        isThinking={!message.metadata?.reasonCompleted}
-                        isExpanded={isThinkingExpanded}
-                        // 使用预缓存的 onToggle 处理函数
-                        onToggle={handleToggleThinking}
-                    />
-                );
-            } else {
-                return <LoadingSpinner/>;
-            }
-        }
-
-        // 针对 AI 消息的 markdown 渲染逻辑
-        if (message.isAi) {
-            if (message.status === 'error') {
-                return (
-                    <motion.div
-                        key="error"
-                        initial={{opacity: 0, y: 10}}
-                        animate={{opacity: 1, y: 0}}
-                        className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg border border-red-200 shadow-sm"
-                    >
-                        <AlertCircle className="w-5 h-5 flex-shrink-0"/>
-                        <span className="text-sm font-medium">{message.text}</span>
-                    </motion.div>
-                );
-            }
-
+        if (message.status === 'sending' && message.text === '') {
             return (
                 <motion.div
-                    key="content"
+                    key="loading"
                     initial={{opacity: 0}}
                     animate={{opacity: 1}}
-                    transition={{duration: 0.2}}
-                    className="prose prose-sm max-w-none prose-pre:p-0 prose-pre:m-0 prose-headings:text-gray-900 prose-p:text-gray-800"
+                    exit={{opacity: 0}}
                 >
-                    <Suspense fallback={<LoadingSpinner/>}>
-                        <LazyReactMarkdown
-                            remarkPlugins={[remarkMath, remarkGfm]}
-                            rehypePlugins={[rehypeKatex, [rehypePrism, {ignoreMissing: true}]]}
-                            components={{
-                                code({node, className, children, ...props}) {
-                                    const isInline = node?.position?.start?.line === node?.position?.end?.line;
-
-                                    if (isInline) {
-                                        return (
-                                            <code
-                                                className="px-1.5 py-0.5 rounded-md bg-gray-100/80 break-words" {...props}>
-                                                {children}
-                                            </code>
-                                        );
-                                    }
-
-                                    return (
-                                        <CodeBlock className={className || 'language-text'} {...props}>
-                                            {children}
-                                        </CodeBlock>
-                                    );
-                                },
-                                p({children}) {
-                                    return <p
-                                        className="mb-2 last:mb-0 text-base break-words text-gray-800">{children}</p>;
-                                },
-                                ul({children}) {
-                                    return <ul className="my-4 list-disc list-outside pl-6">{children}</ul>;
-                                },
-                                ol({children}) {
-                                    return <ol className="my-4 list-decimal list-outside pl-6">{children}</ol>;
-                                },
-                                li({children}) {
-                                    return <li className="mb-1 text-gray-800">{children}</li>;
-                                },
-                                table({children}) {
-                                    return (
-                                        <div className="table-container">
-                                            <table>{children}</table>
-                                        </div>
-                                    );
-                                },
-                                thead({children}) {
-                                    return <thead>{children}</thead>;
-                                },
-                                tbody({children}) {
-                                    return <tbody>{children}</tbody>;
-                                },
-                                tr({children}) {
-                                    return <tr>{children}</tr>;
-                                },
-                                th({children}) {
-                                    return <th>{children}</th>;
-                                },
-                                td({children}) {
-                                    return <td>{children}</td>;
-                                },
-                            }}
-                        >
-                            {message.text}
-                        </LazyReactMarkdown>
-                    </Suspense>
+                    <LoadingSpinner/>
                 </motion.div>
             );
         }
 
-        // 针对非 AI 消息，使用 memo 缓存拆分结果 nonAiChunks
+        if (message.status === 'error') {
+            return (
+                <motion.div
+                    key="error"
+                    initial={{opacity: 0}}
+                    animate={{opacity: 1}}
+                    exit={{opacity: 0}}
+                    className="flex items-center gap-2 text-orange-600"
+                >
+                    <AlertCircle size={16}/>
+                    <span>{message.text}</span>
+                </motion.div>
+            );
+        }
+
+        // 图片消息渲染
+        if (message.type === 'image' && message.metadata?.imageUrls?.length) {
+            return (
+                <motion.div
+                    key="image-content"
+                    initial={{opacity: 0}}
+                    animate={{opacity: 1}}
+                    exit={{opacity: 0}}
+                    className={`space-y-2 w-full ${!message.isAi ? 'flex flex-col items-end' : ''}`}
+                >
+                    {message.text && (
+                        <div className={`mb-2 ${!message.isAi ? 'text-right' : ''}`}>{message.text}</div>
+                    )}
+                    <div className={`flex flex-wrap gap-2 ${!message.isAi ? 'justify-end' : ''}`}>
+                        {message.metadata.imageUrls.map((img: string, index: number) => (
+                            <div key={index} className="relative">
+                                <img 
+                                    src={img} 
+                                    alt="用户上传图片" 
+                                    className="max-w-full rounded-lg max-h-64 object-contain"
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </motion.div>
+            );
+        }
+
+        // 文本消息渲染
         return (
             <motion.div
-                key="content"
+                key="text-content"
                 initial={{opacity: 0}}
                 animate={{opacity: 1}}
-                transition={{duration: 0.2}}
-                className="whitespace-pre-wrap"
+                exit={{opacity: 0}}
+                className="prose prose-sm sm:prose max-w-none"
             >
-                {nonAiChunks.map((chunk, index) => (
-                    <motion.span
-                        key={index}
-                        initial={{opacity: 0, y: 10}}
-                        animate={{opacity: 1, y: 0}}
-                        transition={{
-                            delay: index * 0.02,
-                            duration: 0.2
+                <Suspense fallback={<div>加载内容中...</div>}>
+                    <LazyReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypePrism, rehypeKatex]}
+                        components={{
+                            code: CodeBlock,
+                            p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                            ul: ({children}) => <ul className="list-disc pl-6 mb-4 space-y-1.5">{children}</ul>,
+                            ol: ({children}) => <ol className="list-decimal pl-6 mb-4 space-y-1.5">{children}</ol>,
+                            li: ({children}) => <li className="mb-1">{children}</li>,
+                            a: ({href, children}) => (
+                                <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                    {children}
+                                </a>
+                            ),
                         }}
                     >
-                        {chunk}
-                    </motion.span>
-                ))}
+                        {message.text}
+                    </LazyReactMarkdown>
+                </Suspense>
             </motion.div>
         );
     };

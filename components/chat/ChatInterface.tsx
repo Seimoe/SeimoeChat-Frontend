@@ -145,7 +145,7 @@ const ChatInterface: React.FC = () => {
                             <InputArea
                                 inputValue={inputValue}
                                 setInputValue={setInputValue}
-                                onSend={sendMessage}
+                                onSend={(text, images) => sendMessage(text, images || [])}
                                 isGenerating={isGenerating}
                                 onStop={stopGenerating}
                                 onClear={clearMessages}

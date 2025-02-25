@@ -18,6 +18,7 @@ export class ChatService {
         message: string,
         modelId: string,
         messageHistory: Message[] = [],
+        images: string[] = [],
         onStream?: (partialUpdate: {
             content?: string;
             reasoning?: string;
@@ -40,16 +41,71 @@ export class ChatService {
                 useChatStore.getState().setLoading(true);
             }
 
+            // 构建消息历史，支持图片类型
             const messages = messageHistory
                 .filter(msg => !(msg.isAi && msg.text === ''))
-                .map(msg => ({
-                    role: msg.isAi ? 'assistant' : 'user',
-                    content: msg.text,
-                }));
+                .map(msg => {
+                    const baseMessage = {
+                        role: msg.isAi ? 'assistant' : 'user',
+                        content: msg.text,
+                    };
+
+                    // 如果是用户消息且有图片，则使用OpenAI的多模态格式
+                    if (!msg.isAi && msg.type === 'image' && msg.metadata?.imageUrls?.length) {
+                        return {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: msg.text },
+                                ...msg.metadata.imageUrls.map((imageUrl: string) => ({
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: imageUrl
+                                    }
+                                }))
+                            ]
+                        };
+                    }
+
+                    return baseMessage;
+                });
+
+            // 如果当前消息有图片，将其作为最后一条消息添加
+            if (images.length > 0) {
+                // 如果已经有消息历史，则最后一条已经是当前用户消息，使用OpenAI多模态格式
+                const lastUserMessageIndex = messages.length - 1;
+                if (lastUserMessageIndex >= 0 && messages[lastUserMessageIndex].role === 'user') {
+                    messages[lastUserMessageIndex] = {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: message || '' },
+                            ...images.map(imageUrl => ({
+                                type: 'image_url',
+                                image_url: {
+                                    url: imageUrl
+                                }
+                            }))
+                        ]
+                    };
+                } else {
+                    // 否则添加新消息
+                    messages.push({
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: message || '' },
+                            ...images.map(imageUrl => ({
+                                type: 'image_url',
+                                image_url: {
+                                    url: imageUrl
+                                }
+                            }))
+                        ]
+                    });
+                }
+            }
 
             const url = '/api/v1/chat/messages';
 
-            // 构建请求 payload，并根据模型配置判断是否需要加入 reasoning_effort 参数
+            // 构建请求 payload
             const payload: any = {
                 messages: messages,
                 model_id: modelId,

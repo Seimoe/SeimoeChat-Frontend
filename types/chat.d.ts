@@ -10,6 +10,7 @@ export interface Message {
         error?: string;
         audioUrl?: string;
         imageUrl?: string;
+        imageUrls?: string[];
         reasoning_content?: string;
         reasonCompleted?: boolean;
     };
