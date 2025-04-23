@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import 'katex/dist/katex.min.css';
+import 'prismjs/themes/prism-tomorrow.css';
 import {cookies} from 'next/headers';
 import useUserStore from '@/stores/userStore';
+import ToastProvider from '@/components/ui/ToastProvider';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +46,7 @@ export default async function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
       >
       {children}
+      <ToastProvider />
       </body>
     </html>
   );

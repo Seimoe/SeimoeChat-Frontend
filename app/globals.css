@@ -306,3 +306,75 @@ pre[class*="language-"] {
 .prose table tr:last-child td:last-child {
     border-bottom-right-radius: 12px;
 }
+
+/* 添加以下类来优化动画性能 */
+.hardware-accelerated {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.reduced-motion {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* 添加自定义滚动条样式 (可选，用于美化列表滚动条) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px; /* 滚动条宽度 */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent; /* 滚动条轨道背景 */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15); /* 滚动条滑块颜色 */
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.25); /* 悬停时滑块颜色 */
+}
+
+/* 对于 Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin; /* "auto" or "thin" */
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent; /* thumb track */
+}
+
+@layer utilities {
+  .bg-gradient-fixed {
+    /* 固定渐变背景，移除动画相关属性 */
+    background: linear-gradient(
+      to bottom right,
+      rgba(254, 215, 170, 0.2),
+      rgba(254, 202, 202, 0.2),
+      rgba(251, 207, 232, 0.2)
+    );
+    /* 不再需要以下动画相关属性 */
+    /* background-size: 200% 200%; */
+    /* will-change: background-position; */
+    /* backface-visibility: hidden; */
+    /* filter: blur(6px); */
+    /* animation: none; */
+  }
+  
+  /* 移除以下媒体查询，不再需要动画效果 */
+  /* @media (min-width: 1024px) { ... } */
+  /* @media (prefers-reduced-motion: reduce) { ... } */
+}
+
+/* 可以删除或保留这个关键帧定义，因为已经不再使用 */
+/* @keyframes gradient-pan { ... } */

@@ -1,8 +1,8 @@
 'use client'
 import React from 'react';
 import {motion} from 'framer-motion';
-import MessageBubble from './MessageBubble';
-import InputArea from './InputArea';
+import MessageBubble from './message/MessageBubble';
+import InputArea from './input/InputArea';
 import useChat from '@/hooks/useChat';
 import {useChatStore} from '@/stores/chatStore';
 import 'katex/dist/katex.min.css';
@@ -45,116 +45,110 @@ const ChatInterface: React.FC = () => {
     };
 
     return (
-        <div className="flex h-[100dvh] bg-gradient-to-br from-orange-100 via-red-100 to-pink-100">
-            {/* 主要内容容器 */}
-            <div className="flex flex-1 relative">
-                {/* 背景动画 */}
-                <motion.div
-                    initial={{opacity: 0, scale: 1.1}}
-                    animate={{
-                        scale: [1, 1.1, 1],
-                        opacity: [0.4, 0.5, 0.4],
-                    }}
-                    transition={{
-                        duration: 8,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                    }}
-                    className="absolute inset-0 bg-gradient-to-br from-orange-200/40 via-red-200/40 to-pink-200/40 filter blur-xl"
-                />
+        <>
+            <div className="flex h-[100dvh] bg-gradient-to-br from-orange-100 via-red-100 to-pink-100">
+                {/* 主要内容容器 */}
+                <div className="flex flex-1 relative">
+                    {/* 固定渐变背景（不再使用动画） */}
+                    <div
+                        className={`absolute inset-0 bg-gradient-fixed`}
+                    ></div>
 
-                {/* 侧边栏 */}
-                <Sidebar
-                    isOpen={isSidebarOpen}
-                    onClose={() => setIsSidebarOpen(false)}
-                    isCollapsed={isSidebarCollapsed}
-                    onToggleCollapse={toggleSidebarCollapse}
-                    isDesktop={isDesktop}
-                />
+                    {/* 侧边栏 */}
+                    <Sidebar
+                        isOpen={isSidebarOpen}
+                        onClose={() => setIsSidebarOpen(false)}
+                        isCollapsed={isSidebarCollapsed}
+                        onToggleCollapse={toggleSidebarCollapse}
+                        isDesktop={isDesktop}
+                    />
 
-                {/* 主聊天区域 */}
-                <motion.div
-                    className="flex-1 flex flex-col relative overflow-hidden"
-                    variants={chatVariants}
-                    initial="collapsed"
-                    animate={isDesktop && !isSidebarCollapsed ? "expanded" : "collapsed"}
-                    transition={{
-                        type: "spring",
-                        damping: 25,
-                        stiffness: 200,
-                        mass: 0.8
-                    }}
-                >
-                    {/* TopBar */}
+                    {/* 主聊天区域 */}
                     <motion.div
-                        initial={{y: -20, opacity: 0}}
-                        animate={{y: 0, opacity: 1}}
-                        transition={{duration: 0.4, delay: 0.1}}
-                        className="absolute left-0 right-0 "
+                        className="flex-1 flex flex-col relative overflow-hidden"
+                        variants={chatVariants}
+                        initial="collapsed"
+                        animate={isDesktop && !isSidebarCollapsed ? "expanded" : "collapsed"}
+                        transition={{
+                            type: "spring",
+                            damping: 25,
+                            stiffness: 200,
+                            mass: 0.8
+                        }}
                     >
-                        <TopBar onOpenSidebar={() => setIsSidebarOpen(true)}/>
-                    </motion.div>
-
-                    {/* 消息区域 */}
-                    <div className="absolute inset-0">
-                        {/* 消息列表 */}
+                        {/* TopBar */}
                         <motion.div
-                            initial={{opacity: 0, y: 20}}
-                            animate={{opacity: 1, y: 0}}
-                            transition={{duration: 0.4, delay: 0.2}}
-                            ref={parentRef}
-                            className="absolute inset-0 overflow-y-auto overscroll-contain scroll-smooth"
-                            style={{
-                                scrollbarGutter: 'stable',
-                            }}
+                            initial={{y: -20, opacity: 0}}
+                            animate={{y: 0, opacity: 1}}
+                            transition={{duration: 0.4, delay: 0.1}}
+                            className="absolute left-0 right-0 "
                         >
-                            <div className="pt-20 pb-32 sm:pb-40"> {/* 增加顶部内边距 */}
-                                {/* Privacy Notice */}
-                                <PrivacyNotice/>
-
-                                <div
-                                    className="max-w-4xl mx-auto px-4 relative"
-                                    style={{
-                                        height: `${rowVirtualizer.getTotalSize()}px`,
-                                        width: '100%',
-                                    }}
-                                >
-                                    {virtualizedMessages.map((virtualRow) => (
-                                        <div
-                                            key={virtualRow.message.id}
-                                            data-index={virtualRow.index}
-                                            ref={rowVirtualizer.measureElement}
-                                            style={{
-                                                position: 'absolute',
-                                                top: 0,
-                                                left: 0,
-                                                width: '100%',
-                                                transform: `translateY(${virtualRow.start}px)`,
-                                            }}
-                                        >
-                                            <MessageBubble message={virtualRow.message}/>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div ref={bottomRef} className="h-0"/>
+                            <TopBar onOpenSidebar={() => setIsSidebarOpen(true)}/>
                         </motion.div>
 
-                        {/* 底部输入dock */}
-                        <div className="absolute bottom-0 left-0 right-0 z-10">
-                            <InputArea
-                                inputValue={inputValue}
-                                setInputValue={setInputValue}
-                                onSend={(text, images) => sendMessage(text, images || [])}
-                                isGenerating={isGenerating}
-                                onStop={stopGenerating}
-                                onClear={clearMessages}
-                            />
+                        {/* 消息区域 */}
+                        <div className="absolute inset-0">
+                            {/* 消息列表 */}
+                            <motion.div
+                                initial={{opacity: 0, y: 20}}
+                                animate={{opacity: 1, y: 0}}
+                                transition={{duration: 0.4, delay: 0.2}}
+                                ref={parentRef}
+                                className="absolute inset-0 overflow-y-auto overscroll-contain scroll-smooth"
+                                style={{
+                                    scrollbarGutter: 'stable',
+                                    willChange: "transform",
+                                    transform: "translateZ(0)"
+                                }}
+                            >
+                                <div className="pt-20 pb-32 sm:pb-40"> {/* 增加顶部内边距 */}
+                                    {/* Privacy Notice */}
+                                    <PrivacyNotice/>
+
+                                    <div
+                                        className="max-w-4xl mx-auto px-4 relative"
+                                        style={{
+                                            height: `${rowVirtualizer.getTotalSize()}px`,
+                                            width: '100%',
+                                        }}
+                                    >
+                                        {virtualizedMessages.map((virtualRow) => (
+                                            <div
+                                                key={virtualRow.message.id}
+                                                data-index={virtualRow.index}
+                                                ref={rowVirtualizer.measureElement}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    width: '100%',
+                                                    transform: `translateY(${virtualRow.start}px)`,
+                                                }}
+                                            >
+                                                <MessageBubble message={virtualRow.message}/>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div ref={bottomRef} className="h-0"/>
+                            </motion.div>
+
+                            {/* 底部输入dock */}
+                            <div className="absolute bottom-0 left-0 right-0 z-10">
+                                <InputArea
+                                    inputValue={inputValue}
+                                    setInputValue={setInputValue}
+                                    onSend={(text, images) => sendMessage(text, images || [])}
+                                    isGenerating={isGenerating}
+                                    onStop={stopGenerating}
+                                    onClear={clearMessages}
+                                />
+                            </div>
                         </div>
-                    </div>
-                </motion.div>
+                    </motion.div>
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 

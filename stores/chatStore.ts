@@ -63,7 +63,17 @@ export const useChatStore = create<ChatStore>()(
                         state.messages = state.messages.filter((message) => message.id !== id);
                     })),
 
-                clearMessages: () => set({messages: []}),
+                clearMessages: () =>
+                    set(produce((state) => {
+                        state.messages = [];
+                        state.isLoading = false;  // 重置加载状态
+                        
+                        // 中断正在进行的请求
+                        if (state.abortController) {
+                            state.abortController.abort();
+                            state.abortController = null;
+                        }
+                    })),
 
                 setLoading: (loading) => set({isLoading: loading}),
 

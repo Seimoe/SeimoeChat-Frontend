@@ -10,9 +10,9 @@ interface ApiError extends Error {
 
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-
+const url = "http://localhost:8000" + path;
     try {
-        const response = await fetch(path, {
+        const response = await fetch(url, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -45,7 +45,8 @@ export async function apiStreamRequest(
         reasoningCompleted?: boolean;
     }, error?: string) => void
 ): Promise<string> {
-    const response = await fetch(path, options);
+    const url = "http://localhost:8000" + path;
+    const response = await fetch(url, options);
 
     if (!response.ok) {
         throw new Error(`请求失败: ${response.statusText}`);
