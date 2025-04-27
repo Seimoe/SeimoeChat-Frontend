@@ -11,6 +11,7 @@ export async function middleware(request: NextRequest) {
     // 如果是公开路径，直接放行
     if (
         pathname === '/login' ||
+        pathname === '/register' ||
         pathname.startsWith('/_next') ||
         pathname.startsWith('/api') ||
         pathname === '/favicon.ico'

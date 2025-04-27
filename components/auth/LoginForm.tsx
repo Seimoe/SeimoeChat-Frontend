@@ -8,6 +8,7 @@ import {Loader2, AlertCircle, CheckCircle2, User2, KeyRound, X} from 'lucide-rea
 import Image from 'next/image';
 import BackgroundImage1 from '@/public/login-bg-3.png';
 import useUserStore from '@/stores/userStore';
+import Link from 'next/link';
 
 interface LoginFormDataLocal {
     username: string;
@@ -254,6 +255,13 @@ const LoginForm: React.FC = () => {
                                     )}
                                 </AnimatePresence>
                             </motion.button>
+                            
+                            {/* 添加注册链接 */}
+                            <div className="text-center mt-4">
+                                <Link href="/register" className="text-sm text-gray-600 hover:text-orange-500 transition-colors">
+                                    没有账号？点击注册
+                                </Link>
+                            </div>
                         </form>
                     </motion.div>
                 </div>
