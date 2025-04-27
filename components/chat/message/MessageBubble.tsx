@@ -16,7 +16,6 @@ interface MessageBubbleProps {
 const MessageBubble: React.FC<MessageBubbleProps> = ({message}) => {
     const {retryMessage} = useChat();
 
-    
     const handleRetry = useCallback(() => {
         retryMessage(message.id);
     }, [message.id, retryMessage]);
@@ -83,4 +82,4 @@ export default React.memo(MessageBubble, (prevProps, nextProps) => {
         prevMessage.status === nextMessage.status &&
         JSON.stringify(prevMessage.metadata) === JSON.stringify(nextMessage.metadata)
     );
-}); 
+});

@@ -16,39 +16,46 @@ export interface Message {
     };
 }
 
+export interface Topic {
+    id: string;
+    title: string;
+    last_active_at: string;
+    created_at: string;
+    updated_at: string;
+    is_archived: boolean;
+    metadata?: any;
+}
+
 export interface ChatState {
+    currentTopicId: string | null;
+    currentTopicTitle: string | null;
     messages: Message[];
+    topics: Topic[];
     isLoading: boolean;
     currentModel: string;
     error: string | null;
-    currentPage: number;
     abortController: AbortController | null;
+    reasoningEffort: 'low' | 'medium' | 'high';
 }
 
 export interface ChatStore extends ChatState {
+    // 消息相关
     addMessage: (message: Omit<Message, 'id' | 'timestamp'> & Partial<Pick<Message, 'id' | 'timestamp'>>) => void;
-    updateMessage: (
-        id: string,
-        update: {
-            text?: string;
-            status?: 'sending' | 'sent' | 'error';
-            metadata?: Partial<Message['metadata']>;
-        }
-    ) => void;
-    removeMessage: (id: string) => void;
+    updateMessage: (id: string, update: {text?: string; status?: 'sending' | 'sent' | 'error'; metadata?: Partial<Message['metadata']>;}) => void;
     clearMessages: () => void;
+    
+    // 话题相关
+    setCurrentTopic: (topicId: string | null, title: string | null) => void;
+    fetchTopics: (archived?: boolean) => Promise<Topic[]>;
+    createTopic: (title: string) => Promise<Topic>;
+    fetchTopicMessages: (topicId: string) => Promise<Message[]>;
+    setTopics: (topics: Topic[]) => void;
+    
+    // 其他状态
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
     setCurrentModel: (model: string) => void;
     setAbortController: (controller: AbortController | null) => void;
     stopGenerating: () => void;
-    loadMoreMessages: () => void;
-    getVisibleMessages: () => Message[];
-    truncateMessagesFrom: (messageId: string) => void;
-    reasoningEffort: 'low' | 'medium' | 'high';
     setReasoningEffort: (effort: 'low' | 'medium' | 'high') => void;
 }
-
-export interface ChatHistory {
-    messages: Message[];
-} 

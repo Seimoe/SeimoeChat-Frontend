@@ -2,20 +2,55 @@
  * 封装 API 请求（包括普通请求和流式请求）
  */
 
+import { API_CONFIG } from '@/config/apiConfig';
 
 interface ApiError extends Error {
     status?: number;
     detail?: any;
 }
 
+export const requestCache = {
+    topics: {
+        data: null as any | null,
+        timestamp: 0,
+        pending: false
+    }
+};
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-const url = "http://localhost:8000" + path;
+    // 为 topics 请求添加缓存
+    if (path.startsWith('/api/v1/topics/') && path.indexOf('/messages') === -1 && !options.method) {
+        // 如果正在请求中，等待请求完成
+        if (requestCache.topics.pending) {
+            await new Promise(resolve => {
+                const checkInterval = setInterval(() => {
+                    if (!requestCache.topics.pending) {
+                        clearInterval(checkInterval);
+                        resolve(true);
+                    }
+                }, 50);
+            });
+            return requestCache.topics.data;
+        }
+        
+        // 如果在缓存有效期内，返回缓存数据
+        if (requestCache.topics.data && Date.now() - requestCache.topics.timestamp < 3000) {
+            return requestCache.topics.data as T;
+        }
+        
+        // 否则发起新请求并缓存
+        requestCache.topics.pending = true;
+    }
+    
+    const url = API_CONFIG.BASE_URL + path;
+    const token = typeof window !== 'undefined' ? document.cookie.replace(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/, "$1") : null;
+    
     try {
         const response = await fetch(url, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
                 ...options.headers,
             }
         });
@@ -30,8 +65,20 @@ const url = "http://localhost:8000" + path;
             throw error;
         }
 
-        return response.json();
+        const data = await response.json();
+        
+        // 缓存 topics 请求结果
+        if (path.startsWith('/api/v1/topics/') && path.indexOf('/messages') === -1 && !options.method) {
+            requestCache.topics.data = data;
+            requestCache.topics.timestamp = Date.now();
+            requestCache.topics.pending = false;
+        }
+        
+        return data;
     } catch (error) {
+        if (path.startsWith('/api/v1/topics/') && path.indexOf('/messages') === -1 && !options.method) {
+            requestCache.topics.pending = false;
+        }
         throw error;
     }
 }
@@ -43,9 +90,13 @@ export async function apiStreamRequest(
         content?: string;
         reasoning?: string;
         reasoningCompleted?: boolean;
+        topicId?: string;
+        topicTitle?: string;
+        topic_id?: string;
+        topic_title?: string;
     }, error?: string) => void
 ): Promise<string> {
-    const url = "http://localhost:8000" + path;
+    const url = API_CONFIG.BASE_URL + path;
     const response = await fetch(url, options);
 
     if (!response.ok) {
@@ -85,6 +136,15 @@ export async function apiStreamRequest(
                         shouldStop = true;
                         return accumulatedContent;
                     }
+                    
+                    // 检查是否有话题相关信息
+                    if (data.topic_id && data.topic_title) {
+                        onStream({
+                            topic_id: data.topic_id,
+                            topic_title: data.topic_title
+                        });
+                    }
+                    
                     if (data.reasoning_content) {
                         accumulatedReasoning += data.reasoning_content;
                         onStream({reasoning: accumulatedReasoning});
@@ -111,4 +171,4 @@ export async function apiStreamRequest(
         }
     }
     return accumulatedContent;
-} 
+}

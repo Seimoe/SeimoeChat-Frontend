@@ -1,5 +1,5 @@
 'use client'
-import React from 'react';
+import React, {useEffect} from 'react';
 import {motion} from 'framer-motion';
 import MessageBubble from './message/MessageBubble';
 import InputArea from './input/InputArea';
@@ -14,7 +14,7 @@ import PrivacyNotice from './PrivacyNotice';
 import {useMediaQuery} from '@/hooks/useMediaQuery';
 
 const ChatInterface: React.FC = () => {
-    const {messages, addMessage, inputValue, setInputValue, sendMessage} = useChat();
+    const {messages, addMessage, inputValue, setInputValue, sendMessage, currentTopicId} = useChat();
     const clearMessages = useChatStore((state) => state.clearMessages);
     const isGenerating = useChatStore((state) => state.isLoading);
     const stopGenerating = useChatStore((state) => state.stopGenerating);
@@ -23,8 +23,17 @@ const ChatInterface: React.FC = () => {
     const {rowVirtualizer, virtualizedMessages} = useChatVirtualizer(messages, parentRef);
 
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(true);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
     const isDesktop = useMediaQuery('(min-width: 1024px)');
+
+    // 首次加载时，在桌面端自动展开侧边栏
+    useEffect(() => {
+        if (isDesktop) {
+            setIsSidebarCollapsed(false);
+        } else {
+            setIsSidebarCollapsed(true);
+        }
+    }, [isDesktop]);
 
     const toggleSidebarCollapse = React.useCallback(() => {
         setIsSidebarCollapsed(prev => !prev);
@@ -39,6 +48,15 @@ const ChatInterface: React.FC = () => {
         }
     }, [isGenerating, scrollToBottom, shouldAutoScroll]);
 
+    // 监听话题变化，如果有新话题自动滚动到底部
+    React.useEffect(() => {
+        if (currentTopicId) {
+            setTimeout(() => {
+                scrollToBottom();
+            }, 300);
+        }
+    }, [currentTopicId, scrollToBottom]);
+
     const chatVariants = {
         collapsed: {marginLeft: 0},
         expanded: {marginLeft: "350px"},
@@ -49,7 +67,7 @@ const ChatInterface: React.FC = () => {
             <div className="flex h-[100dvh] bg-gradient-to-br from-orange-100 via-red-100 to-pink-100">
                 {/* 主要内容容器 */}
                 <div className="flex flex-1 relative">
-                    {/* 固定渐变背景（不再使用动画） */}
+                    {/* 渐变背景 */}
                     <div
                         className={`absolute inset-0 bg-gradient-fixed`}
                     ></div>
@@ -101,9 +119,9 @@ const ChatInterface: React.FC = () => {
                                     transform: "translateZ(0)"
                                 }}
                             >
-                                <div className="pt-20 pb-32 sm:pb-40"> {/* 增加顶部内边距 */}
-                                    {/* Privacy Notice */}
-                                    <PrivacyNotice/>
+                                <div className="pt-20 pb-32 sm:pb-40">
+                                    {/* 仅在未有话题时显示隐私声明 */}
+                                    {!currentTopicId && <PrivacyNotice/>}
 
                                     <div
                                         className="max-w-4xl mx-auto px-4 relative"
@@ -152,4 +170,4 @@ const ChatInterface: React.FC = () => {
     );
 };
 
-export default React.memo(ChatInterface); 
+export default React.memo(ChatInterface);

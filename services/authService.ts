@@ -70,4 +70,22 @@ export class AuthService {
             throw registerError;
         }
     }
+    static async getCurrentUser(): Promise<any> {
+        const url = '/api/v1/auth/me';
+        
+        try {
+            return await apiRequest<any>(url);
+        } catch (error: any) {
+            const userError: LoginError = {
+                status: error.status || 500,
+                message: error.message || '获取用户信息失败'
+            };
+
+            if (error.detail) {
+                userError.detail = error.detail;
+            }
+
+            throw userError;
+        }
+    }
 } 

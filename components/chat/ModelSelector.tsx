@@ -1,3 +1,4 @@
+'use client'
 import React, { useState, useCallback, useMemo } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,6 +9,8 @@ import { cn } from '@/utils/tailwind';
 import GeminiIcon from '@/components/icons/GeminiIcon';
 import GPTIcon from '@/components/icons/GPTIcon';
 import DeepSeekIcon from '@/components/icons/DeepSeekIcon';
+import { createPortal } from 'react-dom';
+import ReactDOM from 'react-dom';
 
 // 获取响应速度对应的图标和颜色
 const getSpeedInfo = (speed: string) => {
@@ -184,6 +187,7 @@ const ModelSelector: React.FC = () => {
   const [activeTab, setActiveTab] = useState<CategoryKey>('Gemini');
   const [hoveredModelId, setHoveredModelId] = useState<string | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [selectedModelForInfo, setSelectedModelForInfo] = useState<string | null>(null);
   
   const currentModel = useChatStore((state) => state.currentModel);
   const setCurrentModel = useChatStore((state) => state.setCurrentModel);
@@ -192,6 +196,10 @@ const ModelSelector: React.FC = () => {
   const hoveredModelData = useMemo(() => {
     return modelConfigs.find(m => m.id === hoveredModelId);
   }, [hoveredModelId]);
+  
+  const selectedModelData = useMemo(() => {
+    return modelConfigs.find(m => m.id === selectedModelForInfo);
+  }, [selectedModelForInfo]);
   
   // 按提供商分组模型
   const groupedModels = useMemo<Record<CategoryKey, ModelConfig[]>>(() => {
@@ -212,20 +220,35 @@ const ModelSelector: React.FC = () => {
     closeSelector();
   }, [setCurrentModel, closeSelector]);
 
+  const handleShowModelInfo = useCallback((e: React.MouseEvent, modelId: string) => {
+    e.stopPropagation();
+    setSelectedModelForInfo(modelId);
+  }, []);
+
+  const closeModelInfo = useCallback(() => {
+    setSelectedModelForInfo(null);
+  }, []);
+
   // 点击外部关闭下拉菜单
   React.useEffect(() => {
     if (!isOpen) return;
-    
+
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('.model-selector-container') && !target.closest('.model-info-card-container')) {
+      // 如果移动端信息卡正在打开，则不触发主菜单的关闭
+      if (selectedModelForInfo) return;
+
+      if (
+        !target.closest('.model-selector-container') &&
+        !target.closest('.model-info-card-container')
+      ) {
         closeSelector();
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, closeSelector]);
+  }, [isOpen, closeSelector, selectedModelForInfo]);
 
   // 检测屏幕宽度
   React.useEffect(() => {
@@ -244,7 +267,7 @@ const ModelSelector: React.FC = () => {
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="group relative hover:bg-orange-100/70 rounded-2xl pl-12 sm:pl-16 pr-3 sm:pr-4 py-2 sm:py-2.5 transition-all h-full flex items-center"
+        className="group relative hover:bg-transparent rounded-[20px] sm:rounded-[24px] pl-12 sm:pl-16 pr-3 sm:pr-4 py-2 sm:py-2.5 transition-all h-full flex items-center"
       >
         <div className="absolute left-2 sm:left-3.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 bg-orange-100 rounded-full border border-orange-200/50">
           模型
@@ -387,6 +410,17 @@ const ModelSelector: React.FC = () => {
                                     <Check size={10} strokeWidth={3}/>
                                   </motion.div>
                                 )}
+
+                                {/* 添加信息按钮 */}
+                                {isMobileView && (
+                                  <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={(e) => handleShowModelInfo(e, model.id)}
+                                    className="ml-auto p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex-shrink-0"
+                                  >
+                                    <Info size={14} />
+                                  </motion.button>
+                                )}
                               </div>
                               
                               <div className="flex mt-1 items-center gap-2.5 text-xs">
@@ -439,6 +473,54 @@ const ModelSelector: React.FC = () => {
         )}
       </AnimatePresence>
       
+      {/* 移动设备全屏模型信息卡 - 使用Portal渲染到DOM根级别 */}
+      {ReactDOM.createPortal(
+      <AnimatePresence mode="wait">
+        {selectedModelData && typeof window !== 'undefined' && (
+          <motion.div 
+            className="fixed inset-0 z-[110]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div 
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
+              onClick={closeModelInfo}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            />
+            <motion.div 
+              className="fixed inset-0 z-10 flex items-center justify-center p-4" 
+              onClick={closeModelInfo}
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.9, y: 20, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                className="w-full max-w-md relative"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ModelInfoCard model={selectedModelData} isMobile={true} />
+                <motion.button
+                  onClick={closeModelInfo}
+                  className="absolute top-3 right-3 p-1.5 rounded-full bg-white/90 text-gray-700 hover:bg-white shadow-md"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <X size={18} />
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>,
+      document.body
+      )
+      }
       {/* 全局样式 */}
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
@@ -453,15 +535,12 @@ const ModelSelector: React.FC = () => {
           border-radius: 10px;
           transition: all 0.3s;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
           background: rgba(0, 0, 0, 0.2);
         }
         .custom-scrollbar {
           scrollbar-width: thin;
           scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
-        }
-        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-          background: rgba(0, 0, 0, 0.2);
         }
       `}</style>
     </div>

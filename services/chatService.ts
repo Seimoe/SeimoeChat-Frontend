@@ -1,6 +1,6 @@
 import {Message} from '@/types/chat';
 import {useChatStore} from '@/stores/chatStore';
-import {apiStreamRequest} from '@/services/apiClient';
+import {apiStreamRequest, apiRequest} from '@/services/apiClient';
 import Cookies from 'js-cookie';
 import {modelConfigs} from '@/config/modelConfigs';
 
@@ -19,10 +19,13 @@ export class ChatService {
         modelId: string,
         messageHistory: Message[] = [],
         images: string[] = [],
+        topicId: string | null = null,
         onStream?: (partialUpdate: {
             content?: string;
             reasoning?: string;
-            reasoningCompleted?: boolean
+            reasoningCompleted?: boolean;
+            topicId?: string;
+            topicTitle?: string;
         }, error?: string) => void
     ): Promise<Message> {
         try {
@@ -111,6 +114,11 @@ export class ChatService {
                 model_id: modelId,
             };
 
+            // 如果存在话题 ID，则添加到请求中
+            if (topicId) {
+                payload.topic_id = topicId;
+            }
+
             const modelConfig = modelConfigs.find((model) => model.id === modelId);
             if (modelConfig?.supportsThinkingEffort) {
                 payload.reasoning_effort = useChatStore.getState().reasoningEffort;
@@ -128,7 +136,23 @@ export class ChatService {
 
             // 使用流式请求处理回复
             const accumulatedText = await apiStreamRequest(url, options, (partialUpdate, error) => {
-                onStream?.(partialUpdate, error);
+                // 检查响应中是否包含新的话题信息
+                if (partialUpdate.topic_id && partialUpdate.topic_title) {
+                    // 更新当前话题ID和标题
+                    useChatStore.getState().setCurrentTopic(
+                        partialUpdate.topic_id,
+                        partialUpdate.topic_title
+                    );
+                    
+                    // 也将话题ID和标题传递给回调函数
+                    onStream?.({
+                        ...partialUpdate,
+                        topicId: partialUpdate.topic_id,
+                        topicTitle: partialUpdate.topic_title
+                    }, error);
+                } else {
+                    onStream?.(partialUpdate, error);
+                }
             });
 
             if (typeof window !== 'undefined') {
@@ -174,6 +198,26 @@ export class ChatService {
         }
     }
 
+    async deleteTopic(topicId: string): Promise<void> {
+        try {
+            const token = typeof window !== 'undefined' ? Cookies.get('token') : null;
+            
+            if (!token) {
+                throw new Error("请先登录后再继续操作");
+            }
+            
+            const url = `/api/v1/topics/${topicId}`;
+            await apiRequest(url, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+        } catch (error) {
+            console.error('删除话题失败:', error);
+            throw error;
+        }
+    }
 }
 
 export const chatService = ChatService.getInstance();

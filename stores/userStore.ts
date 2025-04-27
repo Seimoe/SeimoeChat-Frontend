@@ -8,6 +8,7 @@ interface UserState {
     userInfo: Record<string, any> | null;
     login: (data: { token: string } & Record<string, any>) => void;
     logout: () => void;
+    updateUserInfo: (info: Record<string, any>) => void;
 }
 
 const customStorage = {
@@ -30,7 +31,7 @@ const customStorage = {
 
 const useUserStore = create<UserState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             isAuthenticated: false,
             token: null,
             userInfo: null,
@@ -52,6 +53,14 @@ const useUserStore = create<UserState>()(
                     isAuthenticated: false,
                     token: null,
                     userInfo: null
+                });
+            },
+            updateUserInfo: (info) => {
+                set({
+                    userInfo: {
+                        ...get().userInfo,
+                        ...info
+                    }
                 });
             },
         }),
